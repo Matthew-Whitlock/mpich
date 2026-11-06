@@ -270,8 +270,11 @@ static int vtx_issue(int vtxid, MPII_Genutil_vtx_t * vtxp, MPII_Genutil_sched_t 
                 break;
             case MPII_GENUTIL_VTX_KIND__SCHED:{
                     mpi_errno = MPIR_TSP_sched_start(vtxp->u.sched.sched, NULL, &vtxp->u.sched.req);
-                    if (mpi_errno)
-                        MPIR_ERR_POP(mpi_errno);
+                    if (unlikely(mpi_errno)) {
+                        coll_record_error(r, mpi_errno);
+                        vtx_record_completion(vtxp, sched, 0);
+                        break;
+                    }
                     MPL_DBG_MSG_FMT(MPIR_DBG_COLL, VERBOSE,
                                     (MPL_DBG_FDEST, "  --> GENTRAN transport (subsched) issued"));
                     vtx_record_issue(vtxp, sched);
