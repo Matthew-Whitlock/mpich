@@ -162,9 +162,10 @@ static int comm_count_known_failed_peers(MPIR_Comm * comm_ptr)
 
 static void comm_waiting_revoke_add(MPIR_Comm * comm_ptr)
 {
+    MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_UTIL_MUTEX);
     if (MPIDI_COMM(comm_ptr, waiting_revoke_prev) || MPIDI_COMM(comm_ptr, waiting_revoke_next) ||
         MPIDI_global.waiting_revoke_comm_list == comm_ptr) {
-        return;
+        goto fn_exit;
     }
 
     MPIR_Comm_add_ref(comm_ptr);
@@ -174,9 +175,12 @@ static void comm_waiting_revoke_add(MPIR_Comm * comm_ptr)
         MPIDI_COMM(MPIDI_global.waiting_revoke_comm_list, waiting_revoke_prev) = comm_ptr;
     }
     MPIDI_global.waiting_revoke_comm_list = comm_ptr;
+
+  fn_exit:
+    MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_UTIL_MUTEX);
 }
 
-void MPIDI_waiting_revoke_remove(MPIR_Comm * comm_ptr)
+void MPIDI_waiting_revoke_remove_impl(MPIR_Comm * comm_ptr)
 {
     if (MPIDI_COMM(comm_ptr, waiting_revoke_prev)) {
         MPIDI_COMM(MPIDI_COMM(comm_ptr, waiting_revoke_prev), waiting_revoke_next) =
@@ -196,6 +200,13 @@ void MPIDI_waiting_revoke_remove(MPIR_Comm * comm_ptr)
     MPIDI_COMM(comm_ptr, waiting_revoke_next) = NULL;
     MPIDI_COMM(comm_ptr, waiting_for_revoke) = 0;
     MPIR_Comm_release(comm_ptr);
+}
+
+void MPIDI_waiting_revoke_remove(MPIR_Comm * comm_ptr)
+{
+    MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_UTIL_MUTEX);
+    MPIDI_waiting_revoke_remove_impl(comm_ptr);
+    MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_UTIL_MUTEX);
 }
 
 int MPID_Comm_revoke(MPIR_Comm * comm_ptr, int is_remote)

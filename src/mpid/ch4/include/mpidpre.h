@@ -607,9 +607,6 @@ typedef struct MPIDI_Multileads_comp_info_t {
 #define MPIDI_COMM_ALLGATHER(comm,field) ((comm)->dev.ch4.allgather_comp_info)->field
 #define MPIDI_COMM_ALLREDUCE(comm,field) ((comm)->dev.ch4.allreduce_comp_info)->field
 
-void MPIDI_waiting_revoke_remove(struct MPIR_Comm * comm_ptr);
-
-
 typedef struct {
     union {
     MPIDI_NM_OP_DECL} netmod;
@@ -653,6 +650,10 @@ typedef struct MPIDI_num_vci {
 #define HAVE_DEV_COMM_HOOK
 
 int MPIDI_check_for_failed_procs(void);
+
+/* impl version does not hold a mutex, for use when mutex is already held */
+void MPIDI_waiting_revoke_remove_impl(struct MPIR_Comm * comm_ptr);
+void MPIDI_waiting_revoke_remove(struct MPIR_Comm * comm_ptr);
 
 #ifdef HAVE_SIGNAL
 void MPIDI_sigusr1_handler(int sig);

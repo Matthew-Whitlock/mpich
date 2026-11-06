@@ -184,8 +184,9 @@ static bool mpidi_comm_contains_failed_lpid(MPIR_Comm * comm, MPIR_Lpid failed_l
 
 static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid)
 {
-    MPIR_Comm *comm = MPIDI_global.waiting_revoke_comm_list;
+    MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_UTIL_MUTEX);
 
+    MPIR_Comm *comm = MPIDI_global.waiting_revoke_comm_list;
     while (comm) {
         MPIR_Comm *next = MPIDI_COMM(comm, waiting_revoke_next);
 
@@ -193,12 +194,14 @@ static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid
         if (mpidi_comm_contains_failed_lpid(comm, failed_lpid)) {
             MPIDI_COMM(comm, waiting_for_revoke)--;
             if (MPIDI_COMM(comm, waiting_for_revoke) == 0) {
-                MPIDI_waiting_revoke_remove(comm);
+                MPIDI_waiting_revoke_remove_impl(comm);
             }
         }
 
         comm = next;
     }
+
+    MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_UTIL_MUTEX);
 }
 
 int MPIDI_check_for_failed_procs(void)
