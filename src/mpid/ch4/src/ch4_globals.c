@@ -136,7 +136,7 @@ int MPID_Abort(MPIR_Comm * comm, int mpi_errno, int exit_code, const char *error
 
 static UT_array *mpidi_failed_procs;
 
-static int mpidi_record_failed_proc(int rank)
+static int mpidi_record_failed_proc(MPIR_Lpid failed_lpid)
 {
     int is_new = 1;
 
@@ -145,21 +145,21 @@ static int mpidi_record_failed_proc(int rank)
     }
 
     for (int i = 0; i < utarray_len(mpidi_failed_procs); i++) {
-        int *p = (int *) utarray_eltptr(mpidi_failed_procs, i);
-        if (*p == rank) {
+        MPIR_Lpid *p = (MPIR_Lpid *) utarray_eltptr(mpidi_failed_procs, i);
+        if (*p == failed_lpid) {
             is_new = 0;
             break;
         }
     }
 
     if (is_new) {
-        utarray_push_back(mpidi_failed_procs, &rank, MPL_MEM_OTHER);
+        utarray_push_back(mpidi_failed_procs, &failed_lpid, MPL_MEM_OTHER);
     }
 
     return is_new;
 }
 
-static bool mpidi_comm_contains_failed_rank(MPIR_Comm * comm, int failed_rank)
+static bool mpidi_comm_contains_failed_lpid(MPIR_Comm * comm, MPIR_Lpid failed_lpid)
 {
     MPIR_Group *group = NULL;
 
@@ -174,7 +174,7 @@ static bool mpidi_comm_contains_failed_rank(MPIR_Comm * comm, int failed_rank)
     }
 
     for (int i = 0; i < group->size; i++) {
-        if (MPIR_Group_rank_to_lpid(group, i) == failed_rank) {
+        if (MPIR_Group_rank_to_lpid(group, i) == failed_lpid) {
             return true;
         }
     }
@@ -203,7 +203,7 @@ static void mpidi_waiting_revoke_remove(MPIR_Comm * comm_ptr)
     MPIR_Comm_release(comm_ptr);
 }
 
-static void mpidi_decrement_revoke_waiting_for_failed_rank(int failed_rank)
+static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid)
 {
     MPIR_Comm *comm = MPIDI_global.waiting_revoke_comm_list;
 
@@ -211,7 +211,7 @@ static void mpidi_decrement_revoke_waiting_for_failed_rank(int failed_rank)
         MPIR_Comm *next = MPIDI_COMM(comm, waiting_revoke_next);
 
         if (MPIDI_COMM(comm, waiting_for_revoke) > 0 &&
-            mpidi_comm_contains_failed_rank(comm, failed_rank)) {
+            mpidi_comm_contains_failed_lpid(comm, failed_lpid)) {
             MPIDI_COMM(comm, waiting_for_revoke)--;
             if (MPIDI_COMM(comm, waiting_for_revoke) == 0) {
                 mpidi_waiting_revoke_remove(comm);
@@ -248,14 +248,16 @@ int MPIDI_check_for_failed_procs(void)
                 int b = atoi(p + 1);
                 MPIR_Assertp(a <= b);
                 for (int i = a; i <= b; i++) {
-                    if (mpidi_record_failed_proc(i)) {
-                        mpidi_decrement_revoke_waiting_for_failed_rank(i);
+                    MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, i);
+                    if (mpidi_record_failed_proc(failed_lpid)) {
+                        mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
                     }
                 }
             } else {
                 int rank = atoi(token);
-                if (mpidi_record_failed_proc(rank)) {
-                    mpidi_decrement_revoke_waiting_for_failed_rank(rank);
+                MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, rank);
+                if (mpidi_record_failed_proc(failed_lpid)) {
+                    mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
                 }
             }
             token = strtok(NULL, delim);
