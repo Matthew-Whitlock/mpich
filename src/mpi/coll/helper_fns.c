@@ -499,40 +499,22 @@ int MPIC_Waitall(int numreq, MPIR_Request * requests[], MPI_Status * statuses)
     }
 
     mpi_errno = MPIR_Waitall(numreq, requests, status_array);
-    if (mpi_errno == MPI_ERR_IN_STATUS) {
-        for (i = 0; i < numreq; ++i) {
-            int err;
+    /* As an MPIC convenience, return the first error, not MPI_ERR_IN_STATUS */
+    if (mpi_errno != MPI_ERR_IN_STATUS) MPIR_ERR_CHECK(mpi_errno);
 
-            if (requests[i]->kind == MPIR_REQUEST_KIND__RECV) {
-                err = MPIR_Process_status(&status_array[i]);
-                if (err != MPI_SUCCESS && err != MPI_ERR_IN_STATUS) {
-                    mpi_errno = err;
-                    goto fn_cleanup;
-                }
-            }
-
-            if (status_array[i].MPI_ERROR != MPI_SUCCESS &&
-                status_array[i].MPI_ERROR != MPI_ERR_PENDING) {
-                mpi_errno = status_array[i].MPI_ERROR;
-                goto fn_cleanup;
-            }
-        }
-    }
-    MPIR_ERR_CHECK(mpi_errno);
-
-    /* The coll_attr value here is for all requests, not just a single one.  If
-     * in the future, this function is used for multiple collectives at a
-     * single time, we may have to change that. */
     for (i = 0; i < numreq; ++i) {
+        if (!requests[i]) continue;
         if (requests[i]->kind == MPIR_REQUEST_KIND__RECV) {
             mpi_errno = MPIR_Process_status(&status_array[i]);
-            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            mpi_errno = status_array[i].MPI_ERROR;
         }
+        MPIR_ERR_CHECK(mpi_errno);
     }
 
   fn_cleanup:
     for (i = 0; i < numreq; ++i) {
-        MPIR_Request_free(requests[i]);
+        if (requests[i]) MPIR_Request_free(requests[i]);
     }
 
   fn_exit:
