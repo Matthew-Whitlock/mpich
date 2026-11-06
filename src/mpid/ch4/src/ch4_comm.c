@@ -107,20 +107,27 @@ static void comm_mark_revoked(MPIR_Comm * comm_ptr)
     }
 }
 
+static bool comm_matches_context(int context_id, MPIR_Comm * comm_ptr)
+{
+    if (!comm_ptr) {
+        return false;
+    }
+
+    return context_id == comm_ptr->recvcontext_id ||
+        context_id == comm_ptr->recvcontext_id + MPIR_CONTEXT_COLL_OFFSET ||
+        context_id == comm_ptr->context_id ||
+        context_id == comm_ptr->context_id + MPIR_CONTEXT_COLL_OFFSET;
+}
+
 static void comm_revoke_cleanup_vci(MPIR_Comm * comm_ptr, MPIR_Request ** list)
 {
     MPIR_Request *req, *tmp;
 
     DL_FOREACH_SAFE(*list, req, tmp) {
         int context_id = MPIDIG_REQUEST(req, u.recv.context_id);
-        if (context_id == comm_ptr->context_id ||
-            context_id == comm_ptr->context_id + MPIR_CONTEXT_COLL_OFFSET ||
-            (comm_ptr->node_comm &&
-             (context_id == comm_ptr->node_comm->context_id ||
-              context_id == comm_ptr->node_comm->context_id + MPIR_CONTEXT_COLL_OFFSET)) ||
-            (comm_ptr->node_roots_comm &&
-             (context_id == comm_ptr->node_roots_comm->context_id ||
-              context_id == comm_ptr->node_roots_comm->context_id + MPIR_CONTEXT_COLL_OFFSET))) {
+        if (comm_matches_context(context_id, comm_ptr) ||
+            comm_matches_context(context_id, comm_ptr->node_comm) ||
+            comm_matches_context(context_id, comm_ptr->node_roots_comm)) {
             MPID_Cancel_recv(req);
             MPIR_STATUS_SET_CANCEL_BIT(req->status, FALSE);
             req->status.MPI_ERROR = MPIX_ERR_REVOKED;
