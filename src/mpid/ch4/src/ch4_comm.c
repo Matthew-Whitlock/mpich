@@ -176,7 +176,7 @@ static void comm_waiting_revoke_add(MPIR_Comm * comm_ptr)
     MPIDI_global.waiting_revoke_comm_list = comm_ptr;
 }
 
-static void mpidi_waiting_revoke_remove(MPIR_Comm * comm_ptr)
+void MPIDI_waiting_revoke_remove(MPIR_Comm * comm_ptr)
 {
     if (MPIDI_COMM(comm_ptr, waiting_revoke_prev)) {
         MPIDI_COMM(MPIDI_COMM(comm_ptr, waiting_revoke_prev), waiting_revoke_next) =
@@ -194,6 +194,7 @@ static void mpidi_waiting_revoke_remove(MPIR_Comm * comm_ptr)
 
     MPIDI_COMM(comm_ptr, waiting_revoke_prev) = NULL;
     MPIDI_COMM(comm_ptr, waiting_revoke_next) = NULL;
+    MPIDI_COMM(comm_ptr, waiting_for_revoke) = 0;
     MPIR_Comm_release(comm_ptr);
 }
 
@@ -223,13 +224,13 @@ int MPID_Comm_revoke(MPIR_Comm * comm_ptr, int is_remote)
     } else if (is_remote && MPIDI_COMM(comm_ptr, waiting_for_revoke) > 0) {
         MPIDI_COMM(comm_ptr, waiting_for_revoke)--;
         if (MPIDI_COMM(comm_ptr, waiting_for_revoke) == 0) {
-            mpidi_waiting_revoke_remove(comm_ptr);
+            MPIDI_waiting_revoke_remove(comm_ptr);
         }
     }
 
   fn_exit:
     if (MPIDI_COMM(comm_ptr, waiting_for_revoke) == 0) {
-        mpidi_waiting_revoke_remove(comm_ptr);
+        MPIDI_waiting_revoke_remove(comm_ptr);
     }
     MPIR_FUNC_EXIT;
     return mpi_errno;
@@ -449,7 +450,7 @@ int MPID_Comm_free_hook(MPIR_Comm * comm)
     MPIR_ERR_CHECK(mpi_errno);
 #endif
 
-    mpidi_waiting_revoke_remove(comm);
+    MPIDI_waiting_revoke_remove(comm);
     comm_unregister_context(comm);
 
     mpi_errno = MPIDIG_destroy_comm(comm);

@@ -607,6 +607,8 @@ typedef struct MPIDI_Multileads_comp_info_t {
 #define MPIDI_COMM_ALLGATHER(comm,field) ((comm)->dev.ch4.allgather_comp_info)->field
 #define MPIDI_COMM_ALLREDUCE(comm,field) ((comm)->dev.ch4.allreduce_comp_info)->field
 
+void MPIDI_waiting_revoke_remove(struct MPIR_Comm * comm_ptr);
+
 
 typedef struct {
     union {

@@ -182,27 +182,6 @@ static bool mpidi_comm_contains_failed_lpid(MPIR_Comm * comm, MPIR_Lpid failed_l
     return false;
 }
 
-static void mpidi_waiting_revoke_remove(MPIR_Comm * comm_ptr)
-{
-    if (MPIDI_COMM(comm_ptr, waiting_revoke_prev)) {
-        MPIDI_COMM(MPIDI_COMM(comm_ptr, waiting_revoke_prev), waiting_revoke_next) =
-            MPIDI_COMM(comm_ptr, waiting_revoke_next);
-    } else if (MPIDI_global.waiting_revoke_comm_list == comm_ptr) {
-        MPIDI_global.waiting_revoke_comm_list = MPIDI_COMM(comm_ptr, waiting_revoke_next);
-    } else {
-        return;
-    }
-
-    if (MPIDI_COMM(comm_ptr, waiting_revoke_next)) {
-        MPIDI_COMM(MPIDI_COMM(comm_ptr, waiting_revoke_next), waiting_revoke_prev) =
-            MPIDI_COMM(comm_ptr, waiting_revoke_prev);
-    }
-
-    MPIDI_COMM(comm_ptr, waiting_revoke_prev) = NULL;
-    MPIDI_COMM(comm_ptr, waiting_revoke_next) = NULL;
-    MPIR_Comm_release(comm_ptr);
-}
-
 static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid)
 {
     MPIR_Comm *comm = MPIDI_global.waiting_revoke_comm_list;
@@ -210,11 +189,11 @@ static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid
     while (comm) {
         MPIR_Comm *next = MPIDI_COMM(comm, waiting_revoke_next);
 
-        if (MPIDI_COMM(comm, waiting_for_revoke) > 0 &&
-            mpidi_comm_contains_failed_lpid(comm, failed_lpid)) {
+        MPIR_Assert(MPIDI_COMM(comm, waiting_for_revoke) > 0);
+        if (mpidi_comm_contains_failed_lpid(comm, failed_lpid)) {
             MPIDI_COMM(comm, waiting_for_revoke)--;
             if (MPIDI_COMM(comm, waiting_for_revoke) == 0) {
-                mpidi_waiting_revoke_remove(comm);
+                MPIDI_waiting_revoke_remove(comm);
             }
         }
 
