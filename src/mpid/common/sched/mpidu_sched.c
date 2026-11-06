@@ -1083,7 +1083,9 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                     break;
                 case MPIDU_SCHED_ENTRY_PT2PT_SEND:
                     if (e->u.send.sreq != NULL && MPIR_Request_is_complete(e->u.send.sreq)) {
-                        if (s->req->status.MPI_ERROR) {
+                        int err = e->u.send.sreq->status.MPI_ERROR;
+                        if (unlikely(err)) {
+                            s->req->status.MPI_ERROR = err;
                             e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                         } else {
                             e->status = MPIDU_SCHED_ENTRY_STATUS_COMPLETE;
@@ -1094,15 +1096,17 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                     break;
                 case MPIDU_SCHED_ENTRY_PT2PT_RECV:
                     if (e->u.recv.rreq != NULL && MPIR_Request_is_complete(e->u.recv.rreq)) {
+                        int err;
                         /* pass the receive status (source, tag, count, cancel bit) to the
                          * schedule request, which is what MPI_Isendrecv(_replace) returns */
                         MPI_Status *rstatus = &e->u.recv.rreq->status;
-                        MPIR_Process_status(rstatus);
+                        err = MPIR_Process_status(rstatus);
                         s->req->status.MPI_SOURCE = rstatus->MPI_SOURCE;
                         s->req->status.MPI_TAG = rstatus->MPI_TAG;
                         s->req->status.count_lo = rstatus->count_lo;
                         s->req->status.count_hi_and_cancelled = rstatus->count_hi_and_cancelled;
-                        if (s->req->status.MPI_ERROR) {
+                        if (unlikely(err)) {
+                            s->req->status.MPI_ERROR = err;
                             e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                         } else {
                             e->status = MPIDU_SCHED_ENTRY_STATUS_COMPLETE;

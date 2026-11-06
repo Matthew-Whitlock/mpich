@@ -16,6 +16,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_iprobe(int source,
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_ENTER;
+    
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno = MPIDI_NM_mpi_iprobe(source, tag, comm, attr, av, flag, status);
@@ -49,6 +53,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_improbe(int source,
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_ENTER;
+
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno = MPIDI_NM_mpi_improbe(source, tag, comm, attr, av, flag, message, status);
@@ -93,10 +101,6 @@ MPL_STATIC_INLINE_PREFIX int MPID_Probe(int source,
     int mpi_errno, flag = 0;
     MPIR_FUNC_ENTER;
 
-    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
-        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
-    }
-
     if (MPIR_is_self_comm(comm)) {
         /* There better be another thread sending the self message */
         while (!flag) {
@@ -133,10 +137,6 @@ MPL_STATIC_INLINE_PREFIX int MPID_Mprobe(int source,
     int mpi_errno = MPI_SUCCESS, flag = 0;
     MPIR_FUNC_ENTER;
 
-    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
-        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
-    }
-
     if (MPIR_is_self_comm(comm)) {
         /* There better be another thread sending the self message */
         while (!flag) {
@@ -172,10 +172,6 @@ MPL_STATIC_INLINE_PREFIX int MPID_Improbe(int source,
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_ENTER;
 
-    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
-        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
-    }
-
     if (MPIR_is_self_comm(comm)) {
         mpi_errno = MPIDI_Self_improbe(source, tag, comm, attr, flag, message, status);
         MPIR_ERR_CHECK(mpi_errno);
@@ -207,10 +203,6 @@ MPL_STATIC_INLINE_PREFIX int MPID_Iprobe(int source,
 
     int mpi_errno;
     MPIR_FUNC_ENTER;
-
-    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
-        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
-    }
 
     if (MPIR_is_self_comm(comm)) {
         mpi_errno = MPIDI_Self_iprobe(source, tag, comm, attr, flag, status);
