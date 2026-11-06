@@ -13,87 +13,52 @@
 
 int MPID_Comm_reenable_anysource(MPIR_Comm * comm, MPIR_Group ** failed_group_ptr)
 {
-    int mpi_errno = MPI_SUCCESS;
-
     MPIR_FUNC_ENTER;
 
-    mpi_errno = MPIR_Comm_get_failed_impl(comm, failed_group_ptr);
-    MPIR_ERR_CHECK(mpi_errno);
+    MPIR_Assert(0);
 
-  fn_exit:
     MPIR_FUNC_EXIT;
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
+    return MPI_SUCCESS;
 }
 
 int MPID_Comm_remote_group_failed(MPIR_Comm * comm, MPIR_Group ** failed_group_ptr)
 {
-    int mpi_errno = MPI_SUCCESS;
-
     MPIR_FUNC_ENTER;
 
-    *failed_group_ptr = MPIR_Group_empty;
+    MPIR_Assert(0);
 
     MPIR_FUNC_EXIT;
-    return mpi_errno;
+    return MPI_SUCCESS;
 }
 
 int MPID_Comm_group_failed(MPIR_Comm * comm_ptr, MPIR_Group ** failed_group_ptr)
 {
-    int mpi_errno = MPI_SUCCESS;
-
     MPIR_FUNC_ENTER;
 
-    mpi_errno = MPIR_Comm_get_failed_impl(comm_ptr, failed_group_ptr);
-    MPIR_ERR_CHECK(mpi_errno);
+    MPIR_Assert(0);
 
-  fn_exit:
     MPIR_FUNC_EXIT;
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
+    return MPI_SUCCESS;
 }
 
 int MPID_Comm_failure_ack(MPIR_Comm * comm_ptr)
 {
-    int mpi_errno = MPI_SUCCESS;
-
     MPIR_FUNC_ENTER;
 
-    mpi_errno = MPIR_Comm_get_failed_impl(comm_ptr, &MPIDI_global.failed_group);
-    MPIR_ERR_CHECK(mpi_errno);
+    MPIR_Assert(0);
 
-  fn_exit:
     MPIR_FUNC_EXIT;
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
+    return 0;
 }
 
 int MPID_Comm_failure_get_acked(MPIR_Comm * comm_ptr, MPIR_Group ** failed_group_ptr)
 {
-    int mpi_errno = MPI_SUCCESS;
-
     MPIR_FUNC_ENTER;
 
-    if (MPIDI_global.failed_group == NULL) {
-        mpi_errno = MPID_Comm_failure_ack(comm_ptr);
-        MPIR_ERR_CHECK(mpi_errno);
-    }
+    MPIR_Assert(0);
 
-    if (MPIDI_global.failed_group == NULL) {
-        *failed_group_ptr = MPIR_Group_empty;
-    } else {
-        *failed_group_ptr = MPIDI_global.failed_group;
-        MPIR_Group_add_ref(*failed_group_ptr);
-    }
-
-  fn_exit:
     MPIR_FUNC_EXIT;
-    return mpi_errno;
-  fn_fail:
-    goto fn_exit;
+    return 0;
 }
 
 static void comm_mark_revoked(MPIR_Comm * comm_ptr)
