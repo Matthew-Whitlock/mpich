@@ -187,6 +187,7 @@ static int vtx_issue(int vtxid, MPII_Genutil_vtx_t * vtxp, MPII_Genutil_sched_t 
                                                vtxp->u.imcast.tag, vtxp->u.imcast.comm,
                                                &vtxp->u.imcast.req[i], r->u.nbc.coll_attr);
                         if (unlikely(mpi_errno)) {
+                            vtxp->u.imcast.req[i] = NULL;
                             coll_record_error(r, mpi_errno);
                             break;
                         }
@@ -616,6 +617,12 @@ int MPII_Genutil_sched_poke(MPII_Genutil_sched_t * sched, int *is_complete, int 
 
             case MPII_GENUTIL_VTX_KIND__IMCAST:
                 for (i = vtxp->u.imcast.last_complete + 1; i < vtxp->u.imcast.num_dests; i++) {
+                    if (vtxp->u.imcast.req[i] == NULL) {
+                        /* destination i has not been issued yet (or was not created because issue
+                         * stopped early); preserve in-order progression and avoid NULL dereference */
+                        break;
+                    }
+
                     if (MPIR_Request_is_complete(vtxp->u.imcast.req[i])) {
                         int err = MPIR_Process_status(&vtxp->u.imcast.req[i]->status);
                         if (unlikely(err)) {
