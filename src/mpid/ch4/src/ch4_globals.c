@@ -7,6 +7,10 @@
 /* reference them with externs from other files           */
 
 #include <mpidimpl.h>
+#include <ctype.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 #include "ch4_impl.h"
 #include "utarray.h"
 
@@ -182,6 +186,35 @@ static bool mpidi_comm_contains_failed_lpid(MPIR_Comm * comm, MPIR_Lpid failed_l
     return false;
 }
 
+static bool mpidi_parse_failed_proc_token(const char *token, int *rank)
+{
+    bool success = true;
+
+    char *tmp = MPL_strdup(token);
+    if (!tmp) goto fn_fail;
+
+    char *s = tmp;
+    while (isspace(*s)) s++;
+    if (*s == '\0') goto fn_fail;
+
+    char *end = s + strlen(s) - 1;
+    while (end >= s && isspace(*end)) *end-- = '\0';
+
+    char *parse_end = NULL;
+    long value = strtol(s, &parse_end, 10);
+    if (*parse_end != '\0' || value < 0 || value > INT_MAX) goto fn_fail;
+
+    *rank = value;
+
+  fn_exit:
+    if (tmp) MPL_free(tmp);
+    return success;
+
+  fn_fail:
+    success = false;
+    goto fn_exit;
+}
+
 static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid)
 {
     MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_UTIL_MUTEX);
@@ -224,23 +257,19 @@ int MPIDI_check_for_failed_procs(void)
         const char *delim = ",";
         char *token = strtok(failed_procs_string, delim);
         while (token != NULL) {
-            char *p = strchr(token, '-');
-            if (p) {
-                int a = atoi(token);
-                int b = atoi(p + 1);
-                MPIR_Assertp(a <= b);
-                for (int i = a; i <= b; i++) {
-                    MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, i);
-                    if (mpidi_record_failed_proc(failed_lpid)) {
-                        mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
-                    }
-                }
-            } else {
-                int rank = atoi(token);
-                MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, rank);
-                if (mpidi_record_failed_proc(failed_lpid)) {
-                    mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
-                }
+            int rank;
+
+            if (!mpidi_parse_failed_proc_token(token, &rank)) {
+                MPL_DBG_MSG_FMT(MPIDI_CH4_DBG_GENERAL, TYPICAL,
+                                (MPL_DBG_FDEST,
+                                 "Ignoring malformed PMI_dead_processes token: %s", token));
+                token = strtok(NULL, delim);
+                continue;
+            }
+
+            MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, rank);
+            if (mpidi_record_failed_proc(failed_lpid)) {
+                mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
             }
             token = strtok(NULL, delim);
         }
