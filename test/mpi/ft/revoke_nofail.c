@@ -164,6 +164,36 @@ static int irecv(MPI_Comm c, MPI_Request* r) {
 }
 BASIC_TEST_FNS(recv)
 
+static int recv_any_source(MPI_Comm c) {
+    if (comm_rank(c) == 1) {
+        int ret_err = MPI_SUCCESS;
+        for (int i = 0; i < comm_size(c); i++) {
+            if (i == 1) continue;
+            int op_err = MPI_Send(sbuf, 1, MPI_INT, i, 104, c);
+            if (op_err && !ret_err) ret_err = op_err;
+        }
+        return ret_err;
+    } else {
+        return MPI_Recv(rbuf, 1, MPI_INT, MPI_ANY_SOURCE, 104, c, MPI_STATUS_IGNORE);
+    }
+}
+static int irecv_any_source(MPI_Comm c, MPI_Request * r) {
+    if (comm_rank(c) == 1) {
+        int ret_err = MPI_SUCCESS;
+        for (int i = 0; i < comm_size(c); i++) {
+            if (i == 1) continue;
+            /* In the test-passing cases, it's fine to not fill the request on rank 1,
+             * because this operation should always fail and the request should be meaningless. */
+            int op_err = MPI_Send(sbuf, 1, MPI_INT, i, 105, c);
+            if (op_err && !ret_err) ret_err = op_err;
+        }
+        return ret_err;
+    } else {
+        return MPI_Irecv(rbuf, 1, MPI_INT, MPI_ANY_SOURCE, 105, c, r);
+    }
+}
+BASIC_TEST_FNS(recv_any_source)
+
 static int sendrecv(MPI_Comm c) {
     if (comm_rank(c) == 1) {
         int ret_err = MPI_SUCCESS;
@@ -239,6 +269,7 @@ int main(int argc, char **argv)
         BASIC_TEST_FN_NAMES(allgather),
         BASIC_TEST_FN_NAMES(allreduce),
         BASIC_TEST_FN_NAMES(recv),
+        BASIC_TEST_FN_NAMES(recv_any_source),
         BASIC_TEST_FN_NAMES(sendrecv),
         test_probe_unmatched, test_iprobe_unmatched,
         test_mprobe_unmatched, test_improbe_unmatched,
