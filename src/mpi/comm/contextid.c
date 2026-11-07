@@ -888,9 +888,15 @@ static int async_gcn_poll(MPIX_Async_thing thing)
             if (!MPIR_Request_is_complete(st->u.allreduce_request)) {
                 return MPIX_ASYNC_NOPROGRESS;
             } else {
+                if (st->error == MPI_SUCCESS) {
+                    st->error = st->u.allreduce_request->status.MPI_ERROR;
+                }
                 MPIR_Request_free(st->u.allreduce_request);
 
-                int newctxid = gcn_allocate_cid(st);
+                int newctxid = 0;
+                if (st->error == MPI_SUCCESS) {
+                    newctxid = gcn_allocate_cid(st);
+                }
                 if (newctxid) {
                     if (st->ctx0)
                         *st->ctx0 = newctxid;
