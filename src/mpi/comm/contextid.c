@@ -826,7 +826,7 @@ static int async_get_cid(MPIR_Comm * comm_ptr, MPIR_Comm * newcommp, MPIR_Comm *
     MPIR_CHKPMEM_DECL();
 
     /* Internally we can use NULL for query_fn, free_fn, and cancel_fn */
-    mpi_errno = MPIR_Grequest_start_impl(NULL, NULL, NULL, NULL, req);
+    mpi_errno = MPIR_Comm_grequest_start_impl(comm_ptr, NULL, NULL, NULL, NULL, req);
     MPIR_ERR_CHECK(mpi_errno);
 
     struct gcn_state *st = NULL;
@@ -888,9 +888,15 @@ static int async_gcn_poll(MPIX_Async_thing thing)
             if (!MPIR_Request_is_complete(st->u.allreduce_request)) {
                 return MPIX_ASYNC_NOPROGRESS;
             } else {
+                if (st->error == MPI_SUCCESS) {
+                    st->error = st->u.allreduce_request->status.MPI_ERROR;
+                }
                 MPIR_Request_free(st->u.allreduce_request);
 
-                int newctxid = gcn_allocate_cid(st);
+                int newctxid = 0;
+                if (st->error == MPI_SUCCESS) {
+                    newctxid = gcn_allocate_cid(st);
+                }
                 if (newctxid) {
                     if (st->ctx0)
                         *st->ctx0 = newctxid;
