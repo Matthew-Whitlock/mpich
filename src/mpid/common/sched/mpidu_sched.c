@@ -291,6 +291,14 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                                    e->u.send.dest, e->u.send.tag, e->u.send.comm,
                                    0, &e->u.send.sreq);
             if (unlikely(ret_errno)) {
+                int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                if (errclass == MPIX_ERR_PROC_FAILED) {
+                    r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                } else if (errclass == MPIX_ERR_REVOKED) {
+                    r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
+                } else {
+                    r->u.nbc.coll_attr = MPIR_ERR_OTHER;
+                }
                 e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                 if (MPIR_CVAR_REQUEST_ERR_FATAL && errclass != MPIX_ERR_REVOKED) {
                     return ret_errno;
@@ -304,6 +312,14 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                                    e->u.recv.src, e->u.recv.tag, e->u.recv.comm,
                                    0, &e->u.recv.rreq);
             if (unlikely(ret_errno)) {
+                int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                if (errclass == MPIX_ERR_PROC_FAILED) {
+                    r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                } else if (errclass == MPIX_ERR_REVOKED) {
+                    r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
+                } else {
+                    r->u.nbc.coll_attr = MPIR_ERR_OTHER;
+                }
                 e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                 if (MPIR_CVAR_REQUEST_ERR_FATAL && errclass != MPIX_ERR_REVOKED) {
                     return ret_errno;
@@ -338,8 +354,11 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                 MPIR_Assert(e == &s->entries[idx]);
                 if (unlikely(ret_errno)) {
                     if (0 == r->u.nbc.coll_attr) {
-                        if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
+                        int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                        if (errclass == MPIX_ERR_PROC_FAILED) {
                             r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                        } else if (errclass == MPIX_ERR_REVOKED) {
+                            r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
                         } else {
                             r->u.nbc.coll_attr = MPIR_ERR_OTHER;
                         }
@@ -356,8 +375,11 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                 MPIR_Assert(e == &s->entries[idx]);
                 if (unlikely(ret_errno)) {
                     if (0 == r->u.nbc.coll_attr) {
-                        if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
+                        int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                        if (errclass == MPIX_ERR_PROC_FAILED) {
                             r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                        } else if (errclass == MPIX_ERR_REVOKED) {
+                            r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
                         } else {
                             r->u.nbc.coll_attr = MPIR_ERR_OTHER;
                         }
