@@ -294,9 +294,6 @@ int MPIR_TSP_sched_imcast(const void *buf,
     vtxp->u.imcast.req =
         (struct MPIR_Request **) MPL_malloc(sizeof(struct MPIR_Request *) * num_dests,
                                             MPL_MEM_COLL);
-    for (int i = 0; i < num_dests; i++) {
-        vtxp->u.imcast.req[i] = NULL;
-    }
     vtxp->u.imcast.last_complete = -1;
 
     MPL_DBG_MSG_FMT(MPIR_DBG_COLL, VERBOSE,
