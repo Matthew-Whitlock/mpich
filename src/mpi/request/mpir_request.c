@@ -254,6 +254,7 @@ int MPIR_Request_get_error(MPIR_Request * request_ptr)
         case MPIR_REQUEST_KIND__GREQUEST:
             {
                 mpi_errno = MPIR_Grequest_query(request_ptr);
+
                 break;
             }
 
