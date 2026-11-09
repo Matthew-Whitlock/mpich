@@ -133,8 +133,9 @@ static int cga_bcast_start(void *state_p, MPIR_Request ** req)
     state->iter_offset = -state->iter_begin;
     state->iter_sent = false;
 
-    mpi_errno = MPIR_Comm_grequest_start_impl(state->queue.comm, NULL, NULL, NULL, NULL, req);
+    mpi_errno = MPIR_Grequest_start_impl(NULL, NULL, NULL, NULL, req);
     MPIR_ERR_CHECK(mpi_errno);
+    MPIR_Comm_link_grequest(state->queue.comm, *req);
     state->req_ptr = *req;
 
     mpi_errno = MPIR_Async_things_add(cga_bcast_poll, state, NULL);
