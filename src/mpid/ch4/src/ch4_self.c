@@ -186,9 +186,14 @@ int MPIDI_Self_irecv(void *buf, MPI_Aint count, MPI_Datatype datatype, int rank,
 
 int MPIDI_Self_iprobe(int rank, int tag, MPIR_Comm * comm, int attr, int *flag, MPI_Status * status)
 {
+    int mpi_errno = MPI_SUCCESS;
     MPIR_Request *sreq = NULL;
     MPIR_FUNC_ENTER;
     MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_SELF_MUTEX);
+   
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
     FIND_SELF_SEND(sreq, tag, comm->context_id);
     if (sreq) {
@@ -205,17 +210,26 @@ int MPIDI_Self_iprobe(int rank, int tag, MPIR_Comm * comm, int attr, int *flag, 
     } else {
         *flag = FALSE;
     }
+
+  fn_exit:
     MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_SELF_MUTEX);
     MPIR_FUNC_EXIT;
-    return MPI_SUCCESS;
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
 }
 
 int MPIDI_Self_improbe(int rank, int tag, MPIR_Comm * comm, int attr,
                        int *flag, MPIR_Request ** message, MPI_Status * status)
 {
+    int mpi_errno = MPI_SUCCESS;
     MPIR_Request *sreq = NULL;
     MPIR_FUNC_ENTER;
     MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_SELF_MUTEX);
+    
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
     DEQUEUE_SELF_SEND(sreq, tag, comm->context_id);
     if (sreq) {
@@ -238,9 +252,13 @@ int MPIDI_Self_improbe(int rank, int tag, MPIR_Comm * comm, int attr,
     } else {
         *flag = FALSE;
     }
+
+  fn_exit:
     MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_SELF_MUTEX);
     MPIR_FUNC_EXIT;
-    return MPI_SUCCESS;
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
 }
 
 int MPIDI_Self_imrecv(char *buf, MPI_Aint count, MPI_Datatype datatype,

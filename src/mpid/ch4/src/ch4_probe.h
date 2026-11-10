@@ -8,6 +8,7 @@
 
 #include "ch4_proc.h"
 #include "ch4_impl.h"
+#include "ch4_comm.h"
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_iprobe(int source,
                                           int tag, MPIR_Comm * comm, int attr,
@@ -15,6 +16,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_iprobe(int source,
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_ENTER;
+    
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno = MPIDI_NM_mpi_iprobe(source, tag, comm, attr, av, flag, status);
@@ -48,6 +53,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_improbe(int source,
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_ENTER;
+
+    if (comm->revoked && !MPIDI_comm_is_revoke_exempt_tag(tag)) {
+        MPIR_ERR_SETANDJUMP(mpi_errno, MPIX_ERR_REVOKED, "**revoked");
+    }
 
 #ifdef MPIDI_CH4_DIRECT_NETMOD
     mpi_errno = MPIDI_NM_mpi_improbe(source, tag, comm, attr, av, flag, message, status);

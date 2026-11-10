@@ -7,7 +7,12 @@
 /* reference them with externs from other files           */
 
 #include <mpidimpl.h>
+#include <ctype.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 #include "ch4_impl.h"
+#include "utarray.h"
 
 MPIDI_CH4_Global_t MPIDI_global;
 
@@ -133,6 +138,105 @@ int MPID_Abort(MPIR_Comm * comm, int mpi_errno, int exit_code, const char *error
     return 0;
 }
 
+static UT_array *mpidi_failed_procs;
+
+static int mpidi_record_failed_proc(MPIR_Lpid failed_lpid)
+{
+    int is_new = 1;
+
+    if (!mpidi_failed_procs) {
+        utarray_new(mpidi_failed_procs, &ut_int_icd, MPL_MEM_OTHER);
+    }
+
+    for (int i = 0; i < utarray_len(mpidi_failed_procs); i++) {
+        MPIR_Lpid *p = (MPIR_Lpid *) utarray_eltptr(mpidi_failed_procs, i);
+        if (*p == failed_lpid) {
+            is_new = 0;
+            break;
+        }
+    }
+
+    if (is_new) {
+        utarray_push_back(mpidi_failed_procs, &failed_lpid, MPL_MEM_OTHER);
+    }
+
+    return is_new;
+}
+
+static bool mpidi_comm_contains_failed_lpid(MPIR_Comm * comm, MPIR_Lpid failed_lpid)
+{
+    MPIR_Group *group = NULL;
+
+    if (comm->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
+        group = comm->local_group;
+    } else {
+        group = comm->remote_group;
+    }
+
+    if (!group) {
+        return false;
+    }
+
+    for (int i = 0; i < group->size; i++) {
+        if (MPIR_Group_rank_to_lpid(group, i) == failed_lpid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool mpidi_parse_failed_proc_token(const char *token, int *rank)
+{
+    bool success = true;
+
+    char *tmp = MPL_strdup(token);
+    if (!tmp) goto fn_fail;
+
+    char *s = tmp;
+    while (isspace(*s)) s++;
+    if (*s == '\0') goto fn_fail;
+
+    char *end = s + strlen(s) - 1;
+    while (end >= s && isspace(*end)) *end-- = '\0';
+
+    char *parse_end = NULL;
+    long value = strtol(s, &parse_end, 10);
+    if (*parse_end != '\0' || value < 0 || value > INT_MAX) goto fn_fail;
+
+    *rank = value;
+
+  fn_exit:
+    if (tmp) MPL_free(tmp);
+    return success;
+
+  fn_fail:
+    success = false;
+    goto fn_exit;
+}
+
+static void mpidi_decrement_revoke_waiting_for_failed_lpid(MPIR_Lpid failed_lpid)
+{
+    MPID_THREAD_CS_ENTER(VCI, MPIDIU_THREAD_UTIL_MUTEX);
+
+    MPIR_Comm *comm = MPIDI_global.waiting_revoke_comm_list;
+    while (comm) {
+        MPIR_Comm *next = MPIDI_COMM(comm, waiting_revoke_next);
+
+        MPIR_Assert(MPIDI_COMM(comm, waiting_for_revoke) > 0);
+        if (mpidi_comm_contains_failed_lpid(comm, failed_lpid)) {
+            MPIDI_COMM(comm, waiting_for_revoke)--;
+            if (MPIDI_COMM(comm, waiting_for_revoke) == 0) {
+                MPIDI_waiting_revoke_remove_impl(comm);
+            }
+        }
+
+        comm = next;
+    }
+
+    MPID_THREAD_CS_EXIT(VCI, MPIDIU_THREAD_UTIL_MUTEX);
+}
+
 int MPIDI_check_for_failed_procs(void)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -145,13 +249,34 @@ int MPIDI_check_for_failed_procs(void)
 
     char *failed_procs_string = MPIR_pmi_get_jobattr("PMI_dead_processes");
 
-    if (failed_procs_string) {
-        MPL_free(failed_procs_string);
+    if (failed_procs_string && failed_procs_string[0] != '\0') {
         MPL_DBG_MSG_FMT(MPIDI_CH4_DBG_GENERAL, VERBOSE,
                         (MPL_DBG_FDEST,
                          "Received proc fail notification: %s", failed_procs_string));
 
-        /* FIXME: handle ULFM failed groups here */
+        const char *delim = ",";
+        char *token = strtok(failed_procs_string, delim);
+        while (token != NULL) {
+            int rank;
+
+            if (!mpidi_parse_failed_proc_token(token, &rank)) {
+                MPL_DBG_MSG_FMT(MPIDI_CH4_DBG_GENERAL, TYPICAL,
+                                (MPL_DBG_FDEST,
+                                 "Ignoring malformed PMI_dead_processes token: %s", token));
+                token = strtok(NULL, delim);
+                continue;
+            }
+
+            MPIR_Lpid failed_lpid = MPIR_comm_rank_to_lpid(MPIR_Process.comm_world, rank);
+            if (mpidi_record_failed_proc(failed_lpid)) {
+                mpidi_decrement_revoke_waiting_for_failed_lpid(failed_lpid);
+            }
+            token = strtok(NULL, delim);
+        }
+    }
+
+    if (failed_procs_string) {
+        MPL_free(failed_procs_string);
     }
 
     MPIR_FUNC_EXIT;

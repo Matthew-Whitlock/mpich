@@ -1132,6 +1132,12 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
             do_message_check = false;
         }
 #endif
+        /* we cannot iprobe or recv on a revoked comm - however, by the time we free a
+         * revoked comm, we are certain all extant ranks have revoked it as well and
+         * have replied with a revocation message. */
+        if (do_message_check && comm_ptr->revoked) {
+            do_message_check = false;
+        }
         if (do_message_check) {
             /* receive any unmatched messages to clear the queue and avoid context_id
              * reuse issues. unmatched messages could be the result of user error,

@@ -233,6 +233,7 @@ int MPIC_Sendrecv(const void *sendbuf, MPI_Aint sendcount, MPI_Datatype sendtype
                   MPIR_Comm * comm_ptr, MPI_Status * status, int coll_attr)
 {
     int mpi_errno = MPI_SUCCESS;
+    int mpi_errclass = MPI_SUCCESS, mpi_errclass_errno = MPI_SUCCESS;
     int attr = 0;
     MPI_Status mystatus;
     MPIR_Request *recv_req_ptr = NULL, *send_req_ptr = NULL;
@@ -276,8 +277,14 @@ int MPIC_Sendrecv(const void *sendbuf, MPI_Aint sendcount, MPI_Datatype sendtype
     mpi_errno = MPIC_Wait(send_req_ptr);
     MPIR_ERR_CHECK(mpi_errno);
     mpi_errno = MPIC_Wait(recv_req_ptr);
-    if (mpi_errno)
-        MPIR_ERR_POPFATAL(mpi_errno);
+    if (mpi_errno) {
+        mpi_errclass_errno = MPI_Error_class(mpi_errno, &mpi_errclass);
+        if (mpi_errclass_errno || mpi_errclass != MPIX_ERR_REVOKED) {
+            MPIR_ERR_POPFATAL(mpi_errno);
+        } else {
+            MPIR_ERR_POP(mpi_errno);
+        }
+    }
 
     *status = recv_req_ptr->status;
 
@@ -492,17 +499,22 @@ int MPIC_Waitall(int numreq, MPIR_Request * requests[], MPI_Status * statuses)
     }
 
     mpi_errno = MPIR_Waitall(numreq, requests, status_array);
-    MPIR_ERR_CHECK(mpi_errno);
+    /* As an MPIC convenience, return the first error, not MPI_ERR_IN_STATUS */
+    if (mpi_errno != MPI_ERR_IN_STATUS) MPIR_ERR_CHECK(mpi_errno);
 
-    /* The coll_attr value here is for all requests, not just a single one.  If
-     * in the future, this function is used for multiple collectives at a
-     * single time, we may have to change that. */
     for (i = 0; i < numreq; ++i) {
+        if (!requests[i]) continue;
         if (requests[i]->kind == MPIR_REQUEST_KIND__RECV) {
             mpi_errno = MPIR_Process_status(&status_array[i]);
-            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            mpi_errno = status_array[i].MPI_ERROR;
         }
-        MPIR_Request_free(requests[i]);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
+  fn_cleanup:
+    for (i = 0; i < numreq; ++i) {
+        if (requests[i]) MPIR_Request_free(requests[i]);
     }
 
   fn_exit:
@@ -511,5 +523,5 @@ int MPIC_Waitall(int numreq, MPIR_Request * requests[], MPI_Status * statuses)
     MPIR_FUNC_EXIT;
     return mpi_errno;
   fn_fail:
-    goto fn_exit;
+    goto fn_cleanup;
 }

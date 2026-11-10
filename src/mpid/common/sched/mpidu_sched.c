@@ -214,8 +214,12 @@ void MPIDU_Sched_set_tag(struct MPIDU_Sched *s, int tag)
 static void entry_set_failed(MPIR_Request * r, struct MPIDU_Sched_entry *e, int errcode)
 {
     if (0 == r->u.nbc.coll_attr) {
-        if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(errcode)) {
+        int errclass = MPIR_ERR_GET_CLASS(errcode);
+
+        if (errclass == MPIX_ERR_PROC_FAILED) {
             r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+        } else if (errclass == MPIX_ERR_REVOKED) {
+            r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
         } else {
             r->u.nbc.coll_attr = MPIR_ERR_OTHER;
         }
@@ -255,17 +259,10 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
             }
             /* Check if the error is actually fatal to the NBC or we can continue. */
             if (unlikely(ret_errno)) {
-                if (0 == r->u.nbc.coll_attr) {
-                    if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
-                        r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
-                    } else {
-                        r->u.nbc.coll_attr = MPIR_ERR_OTHER;
-                    }
-                }
-                e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
+                entry_set_failed(r, e, ret_errno);
                 MPL_DBG_MSG_D(MPIR_DBG_COMM, VERBOSE, "Sched SEND failed. Errflag: %d\n",
                               (int) r->u.nbc.coll_attr);
-                if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                     return ret_errno;
                 }
             } else {
@@ -279,19 +276,10 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                                    e->u.recv.src, s->tag, comm, &e->u.recv.rreq);
             /* Check if the error is actually fatal to the NBC or we can continue. */
             if (unlikely(ret_errno)) {
-                if (0 == r->u.nbc.coll_attr) {
-                    if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
-                        r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
-                    } else {
-                        r->u.nbc.coll_attr = MPIR_ERR_OTHER;
-                    }
-                }
-                /* We should set the status to failed here - since the request is not freed. this
-                 * will be handled later in MPIDU_Sched_progress_state, so set to started here */
-                e->status = MPIDU_SCHED_ENTRY_STATUS_STARTED;
+                entry_set_failed(r, e, ret_errno);
                 MPL_DBG_MSG_D(MPIR_DBG_COMM, VERBOSE, "Sched RECV failed. Errflag: %d\n",
                               (int) r->u.nbc.coll_attr);
-                if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                     return ret_errno;
                 }
             } else {
@@ -303,8 +291,16 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                                    e->u.send.dest, e->u.send.tag, e->u.send.comm,
                                    0, &e->u.send.sreq);
             if (unlikely(ret_errno)) {
+                int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                if (errclass == MPIX_ERR_PROC_FAILED) {
+                    r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                } else if (errclass == MPIX_ERR_REVOKED) {
+                    r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
+                } else {
+                    r->u.nbc.coll_attr = MPIR_ERR_OTHER;
+                }
                 e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
-                if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                if (MPIR_CVAR_REQUEST_ERR_FATAL && errclass != MPIX_ERR_REVOKED) {
                     return ret_errno;
                 }
             } else {
@@ -316,8 +312,16 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                                    e->u.recv.src, e->u.recv.tag, e->u.recv.comm,
                                    0, &e->u.recv.rreq);
             if (unlikely(ret_errno)) {
+                int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                if (errclass == MPIX_ERR_PROC_FAILED) {
+                    r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                } else if (errclass == MPIX_ERR_REVOKED) {
+                    r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
+                } else {
+                    r->u.nbc.coll_attr = MPIR_ERR_OTHER;
+                }
                 e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
-                if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                if (MPIR_CVAR_REQUEST_ERR_FATAL && errclass != MPIX_ERR_REVOKED) {
                     return ret_errno;
                 }
             } else {
@@ -350,14 +354,17 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                 MPIR_Assert(e == &s->entries[idx]);
                 if (unlikely(ret_errno)) {
                     if (0 == r->u.nbc.coll_attr) {
-                        if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
+                        int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                        if (errclass == MPIX_ERR_PROC_FAILED) {
                             r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                        } else if (errclass == MPIX_ERR_REVOKED) {
+                            r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
                         } else {
                             r->u.nbc.coll_attr = MPIR_ERR_OTHER;
                         }
                     }
                     e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
-                    if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                    if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                         return ret_errno;
                     }
                 } else {
@@ -368,14 +375,17 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
                 MPIR_Assert(e == &s->entries[idx]);
                 if (unlikely(ret_errno)) {
                     if (0 == r->u.nbc.coll_attr) {
-                        if (MPIX_ERR_PROC_FAILED == MPIR_ERR_GET_CLASS(ret_errno)) {
+                        int errclass = MPIR_ERR_GET_CLASS(ret_errno);
+                        if (errclass == MPIX_ERR_PROC_FAILED) {
                             r->u.nbc.coll_attr = MPIR_ERR_PROC_FAILED;
+                        } else if (errclass == MPIX_ERR_REVOKED) {
+                            r->u.nbc.coll_attr = MPIX_ERR_REVOKED;
                         } else {
                             r->u.nbc.coll_attr = MPIR_ERR_OTHER;
                         }
                     }
                     e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
-                    if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                    if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                         return ret_errno;
                     }
                 } else {
@@ -393,7 +403,7 @@ static int MPIDU_Sched_start_entry(struct MPIDU_Sched *s, size_t idx, struct MPI
             ret_errno = e->u.cond.start_p(e->u.cond.state);
             if (unlikely(ret_errno)) {
                 entry_set_failed(r, e, ret_errno);
-                if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                     return ret_errno;
                 }
             } else {
@@ -1075,6 +1085,9 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                                         (MPL_DBG_FDEST, "completed RECV entry %d, rreq=%p\n",
                                          (int) i, e->u.recv.rreq));
                         int err = MPIR_Process_status(&e->u.recv.rreq->status);
+                        if (unlikely(err)) {
+                            entry_set_failed(s->req, e, err);
+                        }
                         if (e->u.recv.status != MPI_STATUS_IGNORE) {
                             MPI_Aint recvd;
                             e->u.recv.status->MPI_ERROR = e->u.recv.rreq->status.MPI_ERROR;
@@ -1092,7 +1105,9 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                     break;
                 case MPIDU_SCHED_ENTRY_PT2PT_SEND:
                     if (e->u.send.sreq != NULL && MPIR_Request_is_complete(e->u.send.sreq)) {
-                        if (s->req->status.MPI_ERROR) {
+                        int err = e->u.send.sreq->status.MPI_ERROR;
+                        if (unlikely(err)) {
+                            s->req->status.MPI_ERROR = err;
                             e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                         } else {
                             e->status = MPIDU_SCHED_ENTRY_STATUS_COMPLETE;
@@ -1103,15 +1118,17 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                     break;
                 case MPIDU_SCHED_ENTRY_PT2PT_RECV:
                     if (e->u.recv.rreq != NULL && MPIR_Request_is_complete(e->u.recv.rreq)) {
+                        int err;
                         /* pass the receive status (source, tag, count, cancel bit) to the
                          * schedule request, which is what MPI_Isendrecv(_replace) returns */
                         MPI_Status *rstatus = &e->u.recv.rreq->status;
-                        MPIR_Process_status(rstatus);
+                        err = MPIR_Process_status(rstatus);
                         s->req->status.MPI_SOURCE = rstatus->MPI_SOURCE;
                         s->req->status.MPI_TAG = rstatus->MPI_TAG;
                         s->req->status.count_lo = rstatus->count_lo;
                         s->req->status.count_hi_and_cancelled = rstatus->count_hi_and_cancelled;
-                        if (s->req->status.MPI_ERROR) {
+                        if (unlikely(err)) {
+                            s->req->status.MPI_ERROR = err;
                             e->status = MPIDU_SCHED_ENTRY_STATUS_FAILED;
                         } else {
                             e->status = MPIDU_SCHED_ENTRY_STATUS_COMPLETE;
@@ -1126,7 +1143,7 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
                         int ret_errno = e->u.cond.test_p(e->u.cond.state, &done);
                         if (unlikely(ret_errno)) {
                             entry_set_failed(s->req, e, ret_errno);
-                            if (MPIR_CVAR_REQUEST_ERR_FATAL) {
+                            if (MPIR_CVAR_REQUEST_ERR_FATAL && MPIR_ERR_GET_CLASS(ret_errno) != MPIX_ERR_REVOKED) {
                                 mpi_errno = ret_errno;
                                 goto fn_fail;
                             }
@@ -1168,6 +1185,9 @@ static int MPIDU_Sched_progress_state(struct MPIDU_Sched_state *state, int *made
             switch (s->req->u.nbc.coll_attr) {
                 case MPIR_ERR_PROC_FAILED:
                     MPIR_ERR_SET(s->req->status.MPI_ERROR, MPIX_ERR_PROC_FAILED, "**proc_failed");
+                    break;
+                case MPIX_ERR_REVOKED:
+                    MPIR_ERR_SET(s->req->status.MPI_ERROR, MPIX_ERR_REVOKED, "**revoked");
                     break;
                 case MPIR_ERR_OTHER:
                     MPIR_ERR_SET(s->req->status.MPI_ERROR, MPI_ERR_OTHER, "**other");
