@@ -607,6 +607,7 @@ typedef struct MPIDI_Multileads_comp_info_t {
 #define MPIDI_COMM_ALLGATHER(comm,field) ((comm)->dev.ch4.allgather_comp_info)->field
 #define MPIDI_COMM_ALLREDUCE(comm,field) ((comm)->dev.ch4.allreduce_comp_info)->field
 
+
 typedef struct {
     union {
     MPIDI_NM_OP_DECL} netmod;

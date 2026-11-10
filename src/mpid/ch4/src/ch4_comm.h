@@ -28,10 +28,10 @@ MPL_STATIC_INLINE_PREFIX int MPID_Comm_AS_enabled(MPIR_Comm * comm)
 {
     MPIR_FUNC_ENTER;
 
-    int enabled = !comm->revoked;
+    MPIR_Assert(0);
 
     MPIR_FUNC_EXIT;
-    return enabled;
+    return MPI_SUCCESS;
 }
 
 #endif /* CH4_COMM_H_INCLUDED */

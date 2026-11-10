@@ -224,6 +224,13 @@ int MPID_Comm_revoke(MPIR_Comm * comm_ptr, int is_remote)
 
 int MPID_Comm_get_all_failed_procs(MPIR_Comm * comm_ptr, MPIR_Group ** failed_group, int tag)
 {
+    MPIR_FUNC_ENTER;
+
+    MPIR_Assert(0);
+
+    MPIR_FUNC_EXIT;
+    return 0;
+    /*
     int mpi_errno = MPI_SUCCESS;
 
     MPIR_FUNC_ENTER;
@@ -236,6 +243,7 @@ int MPID_Comm_get_all_failed_procs(MPIR_Comm * comm_ptr, MPIR_Group ** failed_gr
     return mpi_errno;
   fn_fail:
     goto fn_exit;
+    */
 }
 
 /* number of bits to represent 0..number inclusive */
